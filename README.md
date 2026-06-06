@@ -31,23 +31,21 @@ push_swap_tester/
 
 ## Installation
 
-```bash
-git clone https://github.com/<your-username>/push_swap_tester.git
-```
-
-Then copy (or symlink) the contents of this repository into the **root of your push_swap project**:
+Clone this repository **directly inside the root of your push_swap project**:
 
 ```bash
-cp push_swap_tester/push_swap_tester.sh  your_push_swap/
-cp push_swap_tester/checker_linux        your_push_swap/
+cd your_push_swap
+git clone https://github.com/mdfpva/push_swap_tester.git
 ```
 
-Your project directory should look like this before running:
+Your project directory should look like this:
 
 ```
 your_push_swap/
-├── push_swap_tester.sh
-├── checker_linux
+├── push_swap_tester/
+│   ├── push_swap_tester.sh
+│   ├── checker_linux
+│   └── README.md
 ├── Makefile
 ├── push_swap.h  (or equivalent)
 └── src/
@@ -59,12 +57,24 @@ your_push_swap/
 ## Usage
 
 ```bash
-cd your_push_swap
+cd your_push_swap/push_swap_tester
 chmod +x push_swap_tester.sh checker_linux
 ./push_swap_tester.sh
 ```
 
-That's it. The script handles everything automatically — no arguments needed.
+That's it. The script automatically detects the project in the parent folder and handles everything — no arguments needed.
+
+---
+
+## Quick one-liner
+
+If you just want to run the tests without keeping the tester around, paste this single line into your terminal from the **root of your push_swap project**:
+
+```bash
+clear && git clone https://github.com/mdfpva/push_swap_tester.git && chmod +x push_swap_tester/push_swap_tester.sh push_swap_tester/checker_linux && push_swap_tester/push_swap_tester.sh; rm -rf push_swap_tester
+```
+
+This will: clear the terminal → clone the tester → run all tests → delete the cloned folder.
 
 ---
 
@@ -239,4 +249,4 @@ Runs `make fclean` to leave the project directory clean after testing.
 - If `checker_linux` is not present, all tests that require it are skipped gracefully.
 - If `./checker` (bonus) is not present, the bonus section is skipped entirely.
 - The large and very large input tests use `shuf` to generate random numbers, so results vary between runs — this is expected.
-- The tester must be run from the **root of the push_swap project**, not from inside the tester repository.
+- The tester must be run from **inside the `push_swap_tester/` folder**, which should be cloned into the root of your push_swap project.

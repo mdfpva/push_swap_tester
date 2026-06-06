@@ -2,6 +2,7 @@
 
 # ============================================================
 #  push_swap tester — 42 Porto
+#  Corre de dentro da pasta do tester (clonada no projecto)
 # ============================================================
 
 GREEN='\033[1;32m'
@@ -14,39 +15,40 @@ RESET='\033[0m'
 PASS=0
 FAIL=0
 
+# Pasta do tester e pasta do projecto (pai)
+TESTER_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$TESTER_DIR")"
+
+PS="$PROJECT_DIR/push_swap"
+CK="$TESTER_DIR/checker_linux"
+CKB="$PROJECT_DIR/checker"
+
 ok()  { echo -e "  ${GREEN}[OK]${RESET}  $1"; ((PASS++)); }
 ko()  { echo -e "  ${RED}[KO]${RESET}  $1"; ((FAIL++)); }
 info(){ echo -e "\n${CYAN}${BOLD}▶ $1${RESET}"; }
 note(){ echo -e "  ${YELLOW}NOTE:${RESET} $1"; }
 
 count_ops() {
-    local arg="$1"
-    ./push_swap $arg 2>/dev/null | wc -l | tr -d ' '
-}
-
-checker_ok() {
-    local arg="$1"
-    local result
-    result=$(./push_swap $arg 2>/dev/null | ./checker_linux $arg 2>/dev/null)
-    [ "$result" = "OK" ]
+    "$PS" $1 2>/dev/null | wc -l | tr -d ' '
 }
 
 # ============================================================
 echo -e "\n${BOLD}╔══════════════════════════════════════════╗${RESET}"
 echo -e "${BOLD}║       push_swap TESTER — 42 Porto        ║${RESET}"
 echo -e "${BOLD}╚══════════════════════════════════════════╝${RESET}"
+echo -e "  ${YELLOW}Projecto:${RESET} $PROJECT_DIR"
 
 # ── BUILD ────────────────────────────────────────────────────
 info "BUILD"
 
-if [ ! -f "Makefile" ]; then
-    echo -e "  ${RED}[KO]${RESET}  Makefile não encontrado — não é possível compilar."
+if [ ! -f "$PROJECT_DIR/Makefile" ]; then
+    echo -e "  ${RED}[KO]${RESET}  Makefile não encontrado em $PROJECT_DIR"
     exit 1
 fi
 
 echo -e "  ${YELLOW}»${RESET} A correr 'make'..."
-make_out=$(make 2>&1)
-if [ $? -eq 0 ] && [ -f "./push_swap" ]; then
+make_out=$(make -C "$PROJECT_DIR" 2>&1)
+if [ $? -eq 0 ] && [ -f "$PS" ]; then
     ok "make → push_swap compilado com sucesso"
 else
     ko "make → falhou a compilar"
@@ -55,36 +57,36 @@ else
 fi
 
 echo -e "  ${YELLOW}»${RESET} A correr 'make bonus'..."
-bonus_out=$(make bonus 2>&1)
+bonus_out=$(make -C "$PROJECT_DIR" bonus 2>&1)
 if [ $? -eq 0 ]; then
     ok "make bonus → compilado com sucesso"
-    [ -f "./checker" ] && ok "Executável 'checker' (bonus) gerado" || note "'checker' não gerado pelo bonus"
+    [ -f "$CKB" ] && ok "Executável 'checker' (bonus) gerado" || note "'checker' não gerado pelo bonus"
 else
     note "make bonus → falhou ou não implementado (não é obrigatório para mandatório)"
 fi
 
 echo -e "  ${YELLOW}»${RESET} A correr 'make clean'..."
-clean_out=$(make clean 2>&1)
+clean_out=$(make -C "$PROJECT_DIR" clean 2>&1)
 if [ $? -eq 0 ]; then
     ok "make clean → objectos intermédios removidos"
 else
     ko "make clean → falhou"
 fi
 
-# ── PRE-CHECKS ──────────────────────────────────────────────
+# ── PRÉ-REQUISITOS ───────────────────────────────────────────
 info "PRÉ-REQUISITOS"
 
-if [ ! -f "./push_swap" ]; then
+if [ ! -f "$PS" ]; then
     ko "Executável 'push_swap' não encontrado após compilação"
     exit 1
 fi
 ok "Executável push_swap presente"
 
-if [ ! -f "./checker_linux" ]; then
+if [ ! -f "$CK" ]; then
     note "checker_linux não encontrado — testes de checker serão ignorados"
     HAS_CHECKER=0
 else
-    chmod +x ./checker_linux
+    chmod +x "$CK"
     ok "checker_linux encontrado"
     HAS_CHECKER=1
 fi
@@ -93,13 +95,13 @@ fi
 info "COMPILAÇÃO (Makefile)"
 
 for rule in all clean fclean re; do
-    if grep -qE "^$rule" Makefile; then
+    if grep -qE "^$rule" "$PROJECT_DIR/Makefile"; then
         ok "Regra '$rule' presente no Makefile"
     else
         ko "Regra '$rule' ausente no Makefile"
     fi
 done
-if grep -q "\-Wall" Makefile && grep -q "\-Wextra" Makefile && grep -q "\-Werror" Makefile; then
+if grep -q "\-Wall" "$PROJECT_DIR/Makefile" && grep -q "\-Wextra" "$PROJECT_DIR/Makefile" && grep -q "\-Werror" "$PROJECT_DIR/Makefile"; then
     ok "Flags de compilação (-Wall -Wextra -Werror) presentes"
 else
     ko "Flags de compilação (-Wall -Wextra -Werror) em falta"
@@ -109,7 +111,7 @@ fi
 info "NORMINETTE"
 
 if command -v norminette &>/dev/null; then
-    norm_out=$(norminette . 2>&1)
+    norm_out=$(norminette "$PROJECT_DIR" 2>&1)
     if echo "$norm_out" | grep -q "Error"; then
         ko "Norminette encontrou erros"
         echo "$norm_out" | grep "Error" | head -5 | sed 's/^/       /'
@@ -120,49 +122,37 @@ else
     note "norminette não instalada — saltar teste"
 fi
 
-# ── ERROR MANAGEMENT ────────────────────────────────────────
+# ── GESTÃO DE ERROS ──────────────────────────────────────────
 info "GESTÃO DE ERROS"
 
-# Non-numeric
-err=$(./push_swap "abc" 2>&1 >/dev/null)
-if echo "$err" | grep -q "^Error$"; then
-    ok "Parâmetro não numérico → 'Error\\n' no stderr"
-else
-    ko "Parâmetro não numérico → esperado 'Error\\n' no stderr (obteve: '$err')"
-fi
+err=$("$PS" "abc" 2>&1 >/dev/null)
+echo "$err" | grep -q "^Error$" \
+    && ok "Parâmetro não numérico → 'Error\\n' no stderr" \
+    || ko "Parâmetro não numérico → esperado 'Error\\n' no stderr (obteve: '$err')"
 
-# Duplicate
-err=$(./push_swap "1 2 1" 2>&1 >/dev/null)
-if echo "$err" | grep -q "^Error$"; then
-    ok "Parâmetro duplicado → 'Error\\n' no stderr"
-else
-    ko "Parâmetro duplicado → esperado 'Error\\n' no stderr (obteve: '$err')"
-fi
+err=$("$PS" "1 2 1" 2>&1 >/dev/null)
+echo "$err" | grep -q "^Error$" \
+    && ok "Parâmetro duplicado → 'Error\\n' no stderr" \
+    || ko "Parâmetro duplicado → esperado 'Error\\n' no stderr (obteve: '$err')"
 
-# Greater than MAXINT
-err=$(./push_swap "1 2147483648" 2>&1 >/dev/null)
-if echo "$err" | grep -q "^Error$"; then
-    ok "Valor > MAXINT → 'Error\\n' no stderr"
-else
-    ko "Valor > MAXINT → esperado 'Error\\n' no stderr (obteve: '$err')"
-fi
+err=$("$PS" "1 2147483648" 2>&1 >/dev/null)
+echo "$err" | grep -q "^Error$" \
+    && ok "Valor > MAXINT → 'Error\\n' no stderr" \
+    || ko "Valor > MAXINT → esperado 'Error\\n' no stderr (obteve: '$err')"
 
-# No parameters
-out=$(./push_swap 2>&1)
-if [ -z "$out" ]; then
-    ok "Sem parâmetros → sem output"
-else
-    ko "Sem parâmetros → esperado sem output (obteve: '$out')"
-fi
+out=$("$PS" 2>&1)
+[ -z "$out" ] \
+    && ok "Sem parâmetros → sem output" \
+    || ko "Sem parâmetros → esperado sem output (obteve: '$out')"
 
 # ── STRATEGY FLAGS ───────────────────────────────────────────
 info "STRATEGY FLAGS (--simple / --medium / --complex / --adaptive)"
 
 for flag in --simple --medium --complex --adaptive; do
-    out=$(./push_swap $flag 5 4 3 2 1 2>/dev/null)
-    if [ -n "$out" ] || [ $? -eq 0 ]; then
+    out=$("$PS" $flag 5 4 3 2 1 2>/dev/null)
+    if [ -n "$out" ]; then
         if [ $HAS_CHECKER -eq 1 ]; then
-            result=$(echo "$out" | ./checker_linux 5 4 3 2 1 2>/dev/null)
+            result=$(echo "$out" | "$CK" 5 4 3 2 1 2>/dev/null)
             if [ "$result" = "OK" ]; then
                 ops=$(echo "$out" | wc -l | tr -d ' ')
                 ok "$flag \"5 4 3 2 1\" → OK ($ops operações)"
@@ -177,19 +167,16 @@ for flag in --simple --medium --complex --adaptive; do
     fi
 done
 
-# Default (no flag) = adaptive
-out=$(./push_swap 5 4 3 2 1 2>/dev/null)
-if [ -n "$out" ]; then
-    ok "Sem flag → produz output (comportamento adaptive)"
-else
-    ko "Sem flag → sem output esperado"
-fi
+out=$("$PS" 5 4 3 2 1 2>/dev/null)
+[ -n "$out" ] \
+    && ok "Sem flag → produz output (comportamento adaptive)" \
+    || ko "Sem flag → sem output esperado"
 
-# ── IDENTITY TESTS (already sorted) ─────────────────────────
+# ── IDENTITY TESTS ───────────────────────────────────────────
 info "IDENTITY TESTS (já ordenados)"
 
 for args in "42" "2 3" "0 1 2 3" "0 1 2 3 4 5 6 7 8 9"; do
-    out=$(./push_swap $args 2>/dev/null)
+    out=$("$PS" $args 2>/dev/null)
     if [ -z "$out" ]; then
         ok "\"$args\" → sem output (correto)"
     else
@@ -198,13 +185,13 @@ for args in "42" "2 3" "0 1 2 3" "0 1 2 3 4 5 6 7 8 9"; do
     fi
 done
 
-# ── SMALL INPUTS (3 numbers) ─────────────────────────────────
+# ── SMALL INPUTS (3 números) ─────────────────────────────────
 info "SMALL INPUTS (3 números)"
 
 for args in "2 1 0" "0 2 1" "1 0 2"; do
     if [ $HAS_CHECKER -eq 1 ]; then
         ops=$(count_ops "$args")
-        result=$(./push_swap $args 2>/dev/null | ./checker_linux $args 2>/dev/null)
+        result=$("$PS" $args 2>/dev/null | "$CK" $args 2>/dev/null)
         if [ "$result" = "OK" ]; then
             if [ "$ops" -le 3 ]; then
                 ok "\"$args\" → OK ($ops ops — excelente ≤3)"
@@ -217,18 +204,18 @@ for args in "2 1 0" "0 2 1" "1 0 2"; do
             ko "\"$args\" → checker retornou '$result'"
         fi
     else
-        out=$(./push_swap $args 2>/dev/null)
+        out=$("$PS" $args 2>/dev/null)
         [ -n "$out" ] && ok "\"$args\" → produz output" || ko "\"$args\" → sem output"
     fi
 done
 
-# ── MEDIUM INPUTS (5 numbers) ────────────────────────────────
+# ── MEDIUM INPUTS (5 números) ────────────────────────────────
 info "MEDIUM INPUTS (5 números)"
 
 for args in "1 5 2 4 3" "5 1 4 2 3" "3 5 1 4 2"; do
     if [ $HAS_CHECKER -eq 1 ]; then
         ops=$(count_ops "$args")
-        result=$(./push_swap $args 2>/dev/null | ./checker_linux $args 2>/dev/null)
+        result=$("$PS" $args 2>/dev/null | "$CK" $args 2>/dev/null)
         if [ "$result" = "OK" ]; then
             if [ "$ops" -le 12 ]; then
                 ok "\"$args\" → OK ($ops ops — bom ≤12)"
@@ -241,7 +228,7 @@ for args in "1 5 2 4 3" "5 1 4 2 3" "3 5 1 4 2"; do
             ko "\"$args\" → checker retornou '$result'"
         fi
     else
-        out=$(./push_swap $args 2>/dev/null)
+        out=$("$PS" $args 2>/dev/null)
         [ -n "$out" ] && ok "\"$args\" → produz output" || ko "\"$args\" → sem output"
     fi
 done
@@ -249,14 +236,12 @@ done
 # ── BENCHMARK MODE ───────────────────────────────────────────
 info "BENCHMARK MODE"
 
-bench_out=$(./push_swap --bench --simple 5 4 3 2 1 2>/dev/null)
-if [ -n "$bench_out" ]; then
-    ok "--bench --simple → produz output no stdout"
-else
-    ko "--bench --simple → sem output no stdout"
-fi
+bench_out=$("$PS" --bench --simple 5 4 3 2 1 2>/dev/null)
+[ -n "$bench_out" ] \
+    && ok "--bench --simple → produz output no stdout" \
+    || ko "--bench --simple → sem output no stdout"
 
-bench_err=$(./push_swap --bench --simple 5 4 3 2 1 2>&1 >/dev/null)
+bench_err=$("$PS" --bench --simple 5 4 3 2 1 2>&1 >/dev/null)
 if [ -n "$bench_err" ]; then
     ok "--bench → produz output de benchmark no stderr"
     echo "$bench_err" | grep -iq "disorder\|desordem\|%" \
@@ -269,20 +254,19 @@ else
     ko "--bench → sem output de benchmark no stderr"
 fi
 
-# Disorder: sorted = ~0%, reverse = ~100%
-bench_sorted=$(./push_swap --bench --simple 1 2 3 4 5 2>&1 >/dev/null)
-bench_reverse=$(./push_swap --bench --simple 5 4 3 2 1 2>&1 >/dev/null)
+bench_sorted=$("$PS" --bench --simple 1 2 3 4 5 2>&1 >/dev/null)
+bench_reverse=$("$PS" --bench --simple 5 4 3 2 1 2>&1 >/dev/null)
 note "Disorder input ordenado:  $(echo "$bench_sorted"  | grep -oE '[0-9]+\.[0-9]+%' | head -1)"
 note "Disorder input invertido: $(echo "$bench_reverse" | grep -oE '[0-9]+\.[0-9]+%' | head -1)"
 
-# ── LARGE INPUTS (100 numbers) ───────────────────────────────
+# ── LARGE INPUTS (100 números) ───────────────────────────────
 info "LARGE INPUTS (100 números)"
 
 if [ $HAS_CHECKER -eq 1 ]; then
     for i in 1 2; do
         ARG=$(shuf -i 1-500 -n 100 | tr '\n' ' ')
         ops=$(count_ops "$ARG")
-        result=$(./push_swap $ARG 2>/dev/null | ./checker_linux $ARG 2>/dev/null)
+        result=$("$PS" $ARG 2>/dev/null | "$CK" $ARG 2>/dev/null)
         if [ "$result" = "OK" ]; then
             if [ "$ops" -lt 700 ]; then
                 ok "100 nums (run $i) → OK ($ops ops — excelente <700)"
@@ -301,32 +285,30 @@ else
     note "checker_linux não disponível — saltar teste 100 números"
 fi
 
-# ── STRATEGY FLAGS COMPARISON (50 numbers) ───────────────────
+# ── COMPARAÇÃO DE ESTRATÉGIAS (50 números) ───────────────────
 info "COMPARAÇÃO DE ESTRATÉGIAS (50 números)"
 
 if [ $HAS_CHECKER -eq 1 ]; then
     ARG50=$(shuf -i 1-200 -n 50 | tr '\n' ' ')
     for flag in --simple --medium --complex; do
-        ops=$(./push_swap $flag $ARG50 2>/dev/null | wc -l | tr -d ' ')
-        result=$(./push_swap $flag $ARG50 2>/dev/null | ./checker_linux $ARG50 2>/dev/null)
-        if [ "$result" = "OK" ]; then
-            ok "$flag 50 nums → OK ($ops ops)"
-        else
-            ko "$flag 50 nums → checker retornou '$result'"
-        fi
+        ops=$("$PS" $flag $ARG50 2>/dev/null | wc -l | tr -d ' ')
+        result=$("$PS" $flag $ARG50 2>/dev/null | "$CK" $ARG50 2>/dev/null)
+        [ "$result" = "OK" ] \
+            && ok "$flag 50 nums → OK ($ops ops)" \
+            || ko "$flag 50 nums → checker retornou '$result'"
     done
 else
     note "checker_linux não disponível — saltar comparação de estratégias"
 fi
 
-# ── VERY LARGE INPUTS (500 numbers) ──────────────────────────
+# ── VERY LARGE INPUTS (500 números) ──────────────────────────
 info "VERY LARGE INPUTS (500 números)"
 
 if [ $HAS_CHECKER -eq 1 ]; then
     for i in 1 2; do
         ARG=$(shuf -i 1-1000 -n 500 | tr '\n' ' ')
         ops=$(count_ops "$ARG")
-        result=$(./push_swap $ARG 2>/dev/null | ./checker_linux $ARG 2>/dev/null)
+        result=$("$PS" $ARG 2>/dev/null | "$CK" $ARG 2>/dev/null)
         if [ "$result" = "OK" ]; then
             if [ "$ops" -lt 5500 ]; then
                 ok "500 nums (run $i) → OK ($ops ops — excelente <5500)"
@@ -345,66 +327,64 @@ else
     note "checker_linux não disponível — saltar teste 500 números"
 fi
 
-# ── BONUS: CHECKER ERROR MANAGEMENT ─────────────────────────
+# ── BONUS: CHECKER GESTÃO DE ERROS ───────────────────────────
 info "BONUS — CHECKER: GESTÃO DE ERROS"
 
-if [ -f "./checker" ]; then
-    err=$(./checker "abc" 2>&1 >/dev/null)
+if [ -f "$CKB" ]; then
+    err=$("$CKB" "abc" 2>&1 >/dev/null)
     echo "$err" | grep -q "^Error$" \
         && ok "checker: parâmetro não numérico → Error" \
         || ko "checker: parâmetro não numérico → esperado Error (obteve: '$err')"
 
-    err=$(./checker "1 2 1" 2>&1 >/dev/null)
+    err=$("$CKB" "1 2 1" 2>&1 >/dev/null)
     echo "$err" | grep -q "^Error$" \
         && ok "checker: duplicado → Error" \
         || ko "checker: duplicado → esperado Error (obteve: '$err')"
 
-    err=$(./checker "1 2147483648" 2>&1 >/dev/null)
+    err=$("$CKB" "1 2147483648" 2>&1 >/dev/null)
     echo "$err" | grep -q "^Error$" \
         && ok "checker: > MAXINT → Error" \
         || ko "checker: > MAXINT → esperado Error"
 
-    out=$(./checker 2>&1)
+    out=$("$CKB" 2>&1)
     [ -z "$out" ] \
         && ok "checker: sem parâmetros → sem output" \
         || ko "checker: sem parâmetros → esperado sem output"
 
-    err=$(echo "zz" | ./checker "1 2 3" 2>&1 >/dev/null)
+    err=$(echo "zz" | "$CKB" "1 2 3" 2>&1 >/dev/null)
     echo "$err" | grep -q "^Error$" \
         && ok "checker: instrução inválida → Error" \
         || ko "checker: instrução inválida → esperado Error"
 
-    err=$(printf " sa\n" | ./checker "1 2 3" 2>&1 >/dev/null)
+    err=$(printf " sa\n" | "$CKB" "1 2 3" 2>&1 >/dev/null)
     echo "$err" | grep -q "^Error$" \
         && ok "checker: instrução com espaço extra → Error" \
         || ko "checker: instrução com espaço extra → esperado Error"
 
-    # False test
     info "BONUS — CHECKER: TESTES FALSOS"
-    result=$(printf "sa\npb\nrrr\n" | ./checker 0 9 1 8 2 7 3 6 4 5 2>/dev/null)
+    result=$(printf "sa\npb\nrrr\n" | "$CKB" 0 9 1 8 2 7 3 6 4 5 2>/dev/null)
     [ "$result" = "KO" ] \
         && ok "checker: [sa, pb, rrr] em \"0 9 1 8 2 7 3 6 4 5\" → KO" \
         || ko "checker: esperado KO (obteve: '$result')"
 
-    # Right tests
     info "BONUS — CHECKER: TESTES CORRETOS"
-    result=$(printf "" | ./checker 0 1 2 2>/dev/null)
+    result=$(printf "" | "$CKB" 0 1 2 2>/dev/null)
     [ "$result" = "OK" ] \
         && ok "checker: \"0 1 2\" sem instruções → OK" \
         || ko "checker: \"0 1 2\" sem instruções → esperado OK (obteve: '$result')"
 
-    result=$(printf "pb\nra\npb\nra\nsa\nra\npa\npa\n" | ./checker 0 9 1 8 2 2>/dev/null)
+    result=$(printf "pb\nra\npb\nra\nsa\nra\npa\npa\n" | "$CKB" 0 9 1 8 2 2>/dev/null)
     [ "$result" = "OK" ] \
         && ok "checker: [pb,ra,pb,ra,sa,ra,pa,pa] em \"0 9 1 8 2\" → OK" \
         || ko "checker: esperado OK (obteve: '$result')"
 else
-    note "Executável './checker' não encontrado — testes de bonus ignorados"
+    note "Executável 'checker' (bonus) não encontrado — testes de bonus ignorados"
 fi
 
-# ── CLEANUP FINAL ───────────────────────────────────────────
+# ── CLEANUP FINAL ────────────────────────────────────────────
 info "CLEANUP FINAL"
 echo -e "  ${YELLOW}»${RESET} A correr 'make fclean'..."
-fclean_out=$(make fclean 2>&1)
+fclean_out=$(make -C "$PROJECT_DIR" fclean 2>&1)
 if [ $? -eq 0 ]; then
     ok "make fclean → projecto limpo"
 else
